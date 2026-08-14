@@ -380,25 +380,93 @@ On Windows, PostgreSQL 18 can be installed using WinGet:
 winget install --id PostgreSQL.PostgreSQL.18 -e --source winget
 ```
 
-Verify the installation:
+Check whether PostgreSQL was installed:
+
+```powershell
+Get-ChildItem "C:\Program Files\PostgreSQL"
+```
+
+If PostgreSQL 18 is installed, you should see:
+
+```text
+18
+```
+
+Test `psql`:
 
 ```powershell
 psql --version
 ```
 
-Expected version:
+If PostgreSQL is installed but PowerShell says:
+
+```text
+psql : The term 'psql' is not recognized
+```
+
+test `psql` directly from the PostgreSQL installation folder:
+
+```powershell
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" --version
+```
+
+If this displays:
 
 ```text
 psql (PostgreSQL) 18.x
 ```
 
-If `psql` is installed but is not recognized by the terminal, add the PostgreSQL `bin` directory to the Windows PATH:
+PostgreSQL is installed correctly, but its `bin` folder is not included in the Windows PATH.
+
+Open:
+
+```text
+Edit environment variables for your account
+```
+
+Select:
+
+```text
+Path
+```
+
+Then select:
+
+```text
+Edit
+```
+
+Select:
+
+```text
+New
+```
+
+Add:
 
 ```text
 C:\Program Files\PostgreSQL\18\bin
 ```
 
----
+Save the changes.
+
+Completely close and reopen Visual Studio Code or PowerShell so the new PATH is loaded.
+
+Test again:
+
+```powershell
+psql --version
+```
+
+A successful setup displays:
+
+```text
+psql (PostgreSQL) 18.x
+```
+
+The Python virtual environment does not install PostgreSQL or `psql`.
+
+The virtual environment stores the Python packages used by the project, including `psycopg2-binary`. PostgreSQL is installed separately on the computer, and `psycopg2-binary` allows Python to communicate with the PostgreSQL server.
 
 ### 5. Create the PostgreSQL Database
 
