@@ -40,6 +40,33 @@ def create_roles_table(): #Creates the table that stores the different types of 
 
     connection.close() #Closes the database connection.
 
+
+
+def add_default_roles(): #Adds the three user roles required by the system.
+
+    connection = get_connection() #Opens a connection to the PostgreSQL database.
+
+    cursor = connection.cursor() #Creates a cursor that lets Python send SQL commands to PostgreSQL.
+
+    cursor.execute(
+        """
+        INSERT INTO roles (name)
+        VALUES
+            ('Employee'),
+            ('Technician'),
+            ('Administrator')
+        ON CONFLICT (name) DO NOTHING;
+        """
+    ) #Adds the required roles and skips any role that already exists.
+
+    connection.commit() #Saves the roles permanently in PostgreSQL.
+
+    cursor.close() #Closes the cursor after the SQL command is finished.
+
+    connection.close() #Closes the database connection.
+
+
+
 def create_users_table(): #Creates the table that stores the people who can use the system.
 
     connection = get_connection() #Opens a connection to the PostgreSQL database.
@@ -88,6 +115,32 @@ def create_ticket_categories_table(): #Creates the table that stores the categor
 
     connection.close() #Closes the database connection.
 
+
+def add_default_ticket_categories(): #Adds the four ticket categories required by the system.
+
+    connection = get_connection() #Opens a connection to the PostgreSQL database.
+
+    cursor = connection.cursor() #Creates a cursor that lets Python send SQL commands to PostgreSQL.
+
+    cursor.execute(
+        """
+        INSERT INTO ticket_categories (name)
+        VALUES
+            ('Hardware'),
+            ('Software'),
+            ('Network'),
+            ('Account Access')
+        ON CONFLICT (name) DO NOTHING;
+        """
+    ) #Adds the required ticket categories and skips any category that already exists.
+
+    connection.commit() #Saves the ticket categories permanently in PostgreSQL.
+
+    cursor.close() #Closes the cursor after the SQL command is finished.
+
+    connection.close() #Closes the database connection.
+
+
 def create_priorities_table(): #Creates the table that stores the urgency levels used for IT support tickets.
 
     connection = get_connection() #Opens a connection to the PostgreSQL database.
@@ -109,6 +162,29 @@ def create_priorities_table(): #Creates the table that stores the urgency levels
 
     connection.close() #Closes the database connection.
 
+def add_default_priorities(): #Adds the four ticket priority levels required by the system.
+
+    connection = get_connection() #Opens a connection to the PostgreSQL database.
+
+    cursor = connection.cursor() #Creates a cursor that lets Python send SQL commands to PostgreSQL.
+
+    cursor.execute(
+        """
+        INSERT INTO priorities (name)
+        VALUES
+            ('Low'),
+            ('Medium'),
+            ('High'),
+            ('Critical')
+        ON CONFLICT (name) DO NOTHING;
+        """
+    ) #Adds the required priority levels and skips any priority that already exists.
+
+    connection.commit() #Saves the priorities permanently in PostgreSQL.
+
+    cursor.close() #Closes the cursor after the SQL command is finished.
+
+    connection.close() #Closes the database connection.
 
 def create_ticket_statuses_table(): #Creates the table that stores the progress stages used for IT support tickets.
 
@@ -131,6 +207,30 @@ def create_ticket_statuses_table(): #Creates the table that stores the progress 
 
     connection.close() #Closes the database connection.
 
+def add_default_ticket_statuses(): #Adds the four ticket progress stages required by the system.
+
+    connection = get_connection() #Opens a connection to the PostgreSQL database.
+
+    cursor = connection.cursor() #Creates a cursor that lets Python send SQL commands to PostgreSQL.
+
+    cursor.execute(
+        """
+        INSERT INTO ticket_statuses (name)
+        VALUES
+            ('Open'),
+            ('In Progress'),
+            ('Resolved'),
+            ('Closed')
+        ON CONFLICT (name) DO NOTHING;
+        """
+    ) #Adds the required ticket statuses and skips any status that already exists.
+
+    connection.commit() #Saves the statuses permanently in PostgreSQL.
+
+    cursor.close() #Closes the cursor after the SQL command is finished.
+
+    connection.close() #Closes the database connection.
+
 
 if __name__ == "__main__": #Checks if this file is being run directly to set up the database.
 
@@ -144,4 +244,14 @@ if __name__ == "__main__": #Checks if this file is being run directly to set up 
 
     create_ticket_statuses_table() #Creates the table that stores the progress stages used for support tickets.
 
-    print("Database foundation created successfully.") #Confirms that all foundation tables were created.
+
+    add_default_roles() #Adds Employee, Technician, and Administrator to the roles table.
+
+    add_default_ticket_categories() #Adds Hardware, Software, Network, and Account Access to the ticket categories table.
+
+    add_default_priorities() #Adds Low, Medium, High, and Critical to the priorities table.
+
+    add_default_ticket_statuses() #Adds Open, In Progress, Resolved, and Closed to the ticket statuses table.
+
+
+    print("Database foundation created successfully.") #Confirms that the tables and required starter data were created.
