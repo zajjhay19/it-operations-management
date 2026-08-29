@@ -231,6 +231,65 @@ def add_default_ticket_statuses(): #Adds the four ticket progress stages require
 
     connection.close() #Closes the database connection.
 
+def create_tickets_table(): #Creates the table that stores IT support tickets submitted by employees.
+
+    connection = get_connection() #Opens a connection to the PostgreSQL database.
+
+    cursor = connection.cursor() #Creates a cursor that lets Python send SQL commands to PostgreSQL.
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tickets (
+            id SERIAL PRIMARY KEY,
+            title VARCHAR(255) NOT NULL,
+            description TEXT NOT NULL,
+            employee_id INTEGER NOT NULL,
+            technician_id INTEGER,
+            category_id INTEGER NOT NULL,
+            priority_id INTEGER NOT NULL,
+            status_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (employee_id) REFERENCES users(id),
+            FOREIGN KEY (technician_id) REFERENCES users(id),
+            FOREIGN KEY (category_id) REFERENCES ticket_categories(id),
+            FOREIGN KEY (priority_id) REFERENCES priorities(id),
+            FOREIGN KEY (status_id) REFERENCES ticket_statuses(id)
+        );
+        """
+    ) #Creates the tickets table and connects each ticket to its users, category, priority, and status.
+
+    connection.commit() #Saves the new table permanently in PostgreSQL.
+
+    cursor.close() #Closes the cursor after the SQL command is finished.
+
+    connection.close() #Closes the database connection.
+
+def create_ticket_comments_table(): #Creates the table that stores comments added to IT support tickets.
+
+    connection = get_connection() #Opens a connection to the PostgreSQL database.
+
+    cursor = connection.cursor() #Creates a cursor that lets Python send SQL commands to PostgreSQL.
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ticket_comments (
+            id SERIAL PRIMARY KEY,
+            ticket_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            comment TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (ticket_id) REFERENCES tickets(id),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+        """
+    ) #Creates the ticket comments table and connects each comment to a ticket and the user who wrote it.
+
+    connection.commit() #Saves the new table permanently in PostgreSQL.
+
+    cursor.close() #Closes the cursor after the SQL command is finished.
+
+    connection.close() #Closes the database connection.
 
 if __name__ == "__main__": #Checks if this file is being run directly to set up the database.
 
@@ -244,6 +303,9 @@ if __name__ == "__main__": #Checks if this file is being run directly to set up 
 
     create_ticket_statuses_table() #Creates the table that stores the progress stages used for support tickets.
 
+    create_ticket_comments_table() #Creates the table that stores comments added to IT support tickets and connects them to tickets and users.
+    
+    create_tickets_table() #Creates the table that stores IT support tickets and connects them to users, categories, priorities, and statuses.
 
     add_default_roles() #Adds Employee, Technician, and Administrator to the roles table.
 
