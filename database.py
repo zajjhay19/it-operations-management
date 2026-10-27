@@ -193,7 +193,7 @@ def create_ticket_statuses_table(): #Creates the table that stores the progress 
     cursor = connection.cursor() #Creates a cursor that lets Python send SQL commands to PostgreSQL.
 
     cursor.execute(
-        """
+        """                                                                          
         CREATE TABLE IF NOT EXISTS ticket_statuses (
             id SERIAL PRIMARY KEY,
             name VARCHAR(50) UNIQUE NOT NULL
@@ -291,6 +291,65 @@ def create_ticket_comments_table(): #Creates the table that stores comments adde
 
     connection.close() #Closes the database connection.
 
+
+
+    
+def create_assets_table(): #Creates the table that stores company IT equipment.
+
+    connection = get_connection() #Opens a connection to PostgreSQL.
+
+    cursor = connection.cursor() #Allows Python to execute SQL commands.
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS assets (
+            id SERIAL PRIMARY KEY,
+            asset_tag VARCHAR(100) UNIQUE NOT NULL,
+            asset_name VARCHAR(255) NOT NULL,
+            asset_type VARCHAR(100) NOT NULL,
+            manufacturer VARCHAR(100),
+            model VARCHAR(100),
+            serial_number VARCHAR(100) UNIQUE,
+            status VARCHAR(50) NOT NULL DEFAULT 'Available',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+    ) #Creates the assets table with equipment details and availability.
+
+    connection.commit() #Saves the new table.
+
+    cursor.close() #Closes the cursor.
+
+    connection.close() #Closes the database connection.
+
+
+def create_asset_assignments_table(): #Creates the table that tracks equipment assigned to employees.
+
+    connection = get_connection() #Opens a connection to PostgreSQL.
+
+    cursor = connection.cursor() #Allows Python to execute SQL commands.
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS asset_assignments (
+            id SERIAL PRIMARY KEY,
+            asset_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            returned_at TIMESTAMP,
+            FOREIGN KEY (asset_id) REFERENCES assets(id),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+        """
+    ) #Creates the assignment table and connects equipment to users.
+
+    connection.commit() #Saves the new table permanently.
+
+    cursor.close() #Closes the cursor.
+
+    connection.close() #Closes the database connection.
+
+
 if __name__ == "__main__": #Checks if this file is being run directly to set up the database.
 
     create_roles_table() #Creates the table that stores the different user roles.
@@ -304,6 +363,10 @@ if __name__ == "__main__": #Checks if this file is being run directly to set up 
     create_ticket_statuses_table() #Creates the table that stores the progress stages used for support tickets.
 
     create_ticket_comments_table() #Creates the table that stores comments added to IT support tickets and connects them to tickets and users.
+
+    create_assets_table() #Creates the table that stores company IT equipment.
+
+    create_asset_assignments_table() #Creates the table that records which employees receive company equipment.
     
     create_tickets_table() #Creates the table that stores IT support tickets and connects them to users, categories, priorities, and statuses.
 
