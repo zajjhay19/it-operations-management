@@ -1,0 +1,28 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ticket Details - IT Operations</title>
+</head>
+<body>
+    <h1>Support Ticket #{{ ticket[0] }}</h1>
+
+    <!-- Displays the ticket's title and description. -->
+    <h2>{{ ticket[1] }}</h2>
+    <p><strong>Description:</strong> {{ ticket[2] }}</p>
+
+    <!-- Displays the ticket's category, priority, and status. -->
+    <p><strong>Category:</strong> {{ ticket[3] }}</p>
+    <p><strong>Priority:</strong> {{ ticket[4] }}</p>
+    <p><strong>Status:</strong> {{ ticket[5] }}</p>
+
+    <!-- Displays when the ticket was created and updated. -->
+    <p><strong>Created:</strong> {{ ticket[6] }}</p>
+    <p><strong>Last Updated:</strong> {{ ticket[7] }}</p>
+
+    <!-- Allows the employee to return to their ticket list. -->
+    <p><a href="{{ url_for('view_tickets') }}">Back to My Tickets</a></p>
+</body>
+</html>

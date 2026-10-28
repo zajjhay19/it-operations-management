@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Ticket - IT Operations</title>
+</head>
+<body>
+    <h1>Create Support Ticket</h1>
+
+    
+    <!-- Displays messages from Flask after submitting the form. -->
+    {% with messages = get_flashed_messages() %}
+        {% for message in messages %}
+            <p>{{ message }}</p>
+        {% endfor %}
+    {% endwith %}
+
+
+    <p>Submit a new IT support request.</p>
+
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <label for="title">Ticket Title</label>
+        <input type="text" id="title" name="title" required maxlength="255">
+
+        <label for="description">Description</label>
+        <textarea id="description" name="description" required></textarea>
+
+                <!-- Lets the employee select a ticket category. -->
+        <label for="category_id">Category</label>
+        <select id="category_id" name="category_id" required>
+            <option value="">Select Category</option>
+
+            {% for category in categories %}
+                <option value="{{ category[0] }}">{{ category[1] }}</option>
+            {% endfor %}
+        </select>
+
+        <!-- Lets the employee select the ticket priority. -->
+        <label for="priority_id">Priority</label>
+<select id="priority_id" name="priority_id" required>
+    <option value="">Select Priority</option>
+
+    {% for priority in priorities %}
+        <option value="{{ priority[0] }}">{{ priority[1] }}</option>
+    {% endfor %}
+</select>
+
+        <button type="submit">Submit Ticket</button>
+    </form>
+
+    <p><a href="{{ url_for('dashboard') }}">Back to Dashboard</a></p>
+</body>
+</html>

@@ -181,6 +181,222 @@ def dashboard(): #Displays a page available only to logged-in users.
 
     return render_template("dashboard.html", first_name=session["first_name"]) #Displays the dashboard for the logged-in user.
 
+# Displays the form for creating a support ticket.
+
+# Allows logged-in employees to create support tickets.
+@app.route("/tickets/new", methods=["GET", "POST"])
+def new_ticket():
+
+    # Redirects visitors who are not logged in.
+    if "user_id" not in session:
+        flash("Please log in to create a support ticket.")
+        return redirect(url_for("login"))
+
+    # Opens a connection to PostgreSQL.
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        # Retrieves the categories for the dropdown menu.
+        cursor.execute(
+            "SELECT id, name FROM ticket_categories ORDER BY id;"
+        )
+        categories = cursor.fetchall()
+
+        # Retrieves the priorities for the dropdown menu.
+        cursor.execute(
+            "SELECT id, name FROM priorities ORDER BY id;"
+        )
+        priorities = cursor.fetchall()
+
+        # Checks whether the employee submitted the form.
+        if request.method == "POST":
+
+            # Gets the information entered into the form.
+            title = request.form.get("title", "").strip()
+            description = request.form.get("description", "").strip()
+            category_id = request.form.get("category_id", "")
+            priority_id = request.form.get("priority_id", "")
+
+            # Prevents empty fields from being submitted.
+            if not all([title, description, category_id, priority_id]):
+                flash("Please complete all ticket fields.")
+                return redirect(url_for("new_ticket"))
+
+            # Checks the maximum title length.
+            if len(title) > 255:
+                flash("Ticket title must be 255 characters or fewer.")
+                return redirect(url_for("new_ticket"))
+
+            # Confirms that the selected category and priority exist.
+            valid_categories = {str(item[0]) for item in categories}
+            valid_priorities = {str(item[0]) for item in priorities}
+
+            if category_id not in valid_categories or priority_id not in valid_priorities:
+                flash("Please select a valid category and priority.")
+                return redirect(url_for("new_ticket"))
+
+            # Finds the ID of the Open ticket status.
+            cursor.execute(
+                "SELECT id FROM ticket_statuses WHERE name = 'Open';"
+            )
+            status = cursor.fetchone()
+
+            # Stops ticket creation if the Open status is missing.
+            if status is None:
+                flash("Ticket creation is temporarily unavailable.")
+                return redirect(url_for("new_ticket"))
+
+            # Saves the new ticket in PostgreSQL.
+            cursor.execute(
+                """
+                INSERT INTO tickets
+                    (title, description, employee_id, category_id, priority_id, status_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id;
+                """,
+                (
+                    title,
+                    description,
+                    session["user_id"],
+                    int(category_id),
+                    int(priority_id),
+                    status[0]
+                )
+            )
+
+            # Retrieves the ID of the newly created ticket.
+            ticket_id = cursor.fetchone()[0]
+
+            # Permanently saves the ticket.
+            connection.commit()
+
+            # Shows a success message.
+            flash(f"Ticket #{ticket_id} created successfully.")
+
+            # Returns to the ticket creation page.
+            return redirect(url_for("new_ticket"))
+
+    except Exception:
+        # Cancels unfinished database changes if an error occurs.
+        connection.rollback()
+
+        # Records the error in the Flask terminal.
+        app.logger.exception("Unable to create or load a support ticket.")
+
+        # Shows a safe message without exposing database details.
+        flash("Something went wrong. Please try again.")
+
+        return redirect(url_for("dashboard"))
+
+    finally:
+        # Closes the database resources.
+        cursor.close()
+        connection.close()
+
+    # Displays the form when the user first opens the page.
+    return render_template(
+        "new_ticket.html",
+        categories=categories,
+        priorities=priorities
+    )
+
+
+# Displays support tickets belonging to the logged-in employee.
+@app.route("/tickets")
+def view_tickets():
+
+    # Prevents visitors from viewing tickets without logging in.
+    if "user_id" not in session:
+        flash("Please log in to view your tickets.")
+        return redirect(url_for("login"))
+
+    # Connects to PostgreSQL.
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        # Retrieves only tickets created by the logged-in employee.
+        cursor.execute(
+            """
+            SELECT
+                t.id,
+                t.title,
+                c.name,
+                p.name,
+                s.name,
+                t.created_at
+            FROM tickets AS t
+            JOIN ticket_categories AS c ON t.category_id = c.id
+            JOIN priorities AS p ON t.priority_id = p.id
+            JOIN ticket_statuses AS s ON t.status_id = s.id
+            WHERE t.employee_id = %s
+            ORDER BY t.created_at DESC, t.id DESC;
+            """,
+            (session["user_id"],)
+        )
+
+        # Stores the database results in a Python list.
+        tickets = cursor.fetchall()
+
+    finally:
+        # Closes the database connection.
+        cursor.close()
+        connection.close()
+
+    # Sends the tickets to the HTML page.
+    return render_template("tickets.html", tickets=tickets)
+
+# Displays the details of one support ticket.
+@app.route("/tickets/<int:ticket_id>")
+def ticket_details(ticket_id):
+
+    # Prevents visitors from viewing tickets without logging in.
+    if "user_id" not in session:
+        flash("Please log in to view ticket details.")
+        return redirect(url_for("login"))
+
+    # Opens a connection to PostgreSQL.
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        # Retrieves the ticket only if it belongs to the logged-in employee.
+        cursor.execute(
+            """
+            SELECT
+                t.id,
+                t.title,
+                t.description,
+                c.name,
+                p.name,
+                s.name,
+                t.created_at,
+                t.updated_at
+            FROM tickets AS t
+            JOIN ticket_categories AS c ON t.category_id = c.id
+            JOIN priorities AS p ON t.priority_id = p.id
+            JOIN ticket_statuses AS s ON t.status_id = s.id
+            WHERE t.id = %s AND t.employee_id = %s;
+            """,
+            (ticket_id, session["user_id"])
+        )
+
+        # Retrieves one matching ticket, or None if no ticket is found.
+        ticket = cursor.fetchone()
+
+    finally:
+        # Closes the database resources.
+        cursor.close()
+        connection.close()
+
+    # Returns a 404 error if the ticket does not exist or belongs to someone else.
+    if ticket is None:
+        return "Ticket not found.", 404
+
+    # Sends the ticket information to the HTML page.
+    return render_template("ticket_details.html", ticket=ticket)
+
 if __name__ == "__main__": #Checks whether this file is being run directly.
 
     app.run(debug=True) #Starts Flask in development mode so we can test the website.
