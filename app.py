@@ -1,3 +1,5 @@
+from functools import wraps
+
 from flask_wtf.csrf import CSRFProtect #Imports protection against unauthorized form submissions.
 
 import psycopg2 #Imports PostgreSQL errors so duplicate emails can be handled.
@@ -13,6 +15,57 @@ import os #Imports tools for reading environment variables.
 app = Flask(__name__) #Creates the Flask web application.
 app.secret_key = os.environ["SECRET_KEY"] #Uses a secret value to protect Flask session cookies.
 csrf = CSRFProtect(app) #Enables CSRF protection for form submissions throughout the application.
+
+
+# Restricts a page to users with specific roles.
+def role_required(*allowed_roles):
+
+    # Creates a decorator for the protected route.
+    def decorator(function):
+
+        # Preserves the original function's name.
+        @wraps(function)
+        def wrapper(*args, **kwargs):
+
+            # Redirects visitors who are not logged in.
+            if "user_id" not in session:
+                flash("Please log in to continue.")
+                return redirect(url_for("login"))
+
+            # Connects to PostgreSQL to check the user's current role.
+            connection = get_connection()
+            cursor = connection.cursor()
+
+            try:
+                # Retrieves the user's role from the database.
+                cursor.execute(
+                    """
+                    SELECT r.name
+                    FROM users AS u
+                    JOIN roles AS r ON u.role_id = r.id
+                    WHERE u.id = %s;
+                    """,
+                    (session["user_id"],)
+                )
+
+                # Gets the role name, if the user exists.
+                result = cursor.fetchone()
+
+            finally:
+                # Closes the database connection.
+                cursor.close()
+                connection.close()
+
+            # Rejects users who do not have permission.
+            if result is None or result[0] not in allowed_roles:
+                return "Access denied.", 403
+
+            # Runs the protected route when permission is granted.
+            return function(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 @app.route("/") #Tells Flask to run the function below when someone visits the home page.
 def home(): #Creates the function responsible for displaying the home page.
@@ -396,6 +449,248 @@ def ticket_details(ticket_id):
 
     # Sends the ticket information to the HTML page.
     return render_template("ticket_details.html", ticket=ticket)
+
+# Test page that only administrators can access.
+@app.route("/admin/test")
+@role_required("Administrator")
+def admin_test():
+    return "Administrator access granted."
+
+
+
+# Displays all support tickets to administrators.
+@app.route("/admin/tickets")
+@role_required("Administrator")
+def admin_tickets():
+
+    # Opens a connection to PostgreSQL.
+    connection = get_connection()
+
+    # Creates a cursor for running SQL commands.
+    cursor = connection.cursor()
+
+    try:
+        # Retrieves all support tickets and their related information.
+        cursor.execute(
+            """
+            SELECT
+                t.id,
+                t.title,
+                u.first_name,
+                u.last_name,
+                c.name,
+                p.name,
+                s.name,
+                t.created_at
+            FROM tickets AS t
+            JOIN users AS u ON t.employee_id = u.id
+            JOIN ticket_categories AS c ON t.category_id = c.id
+            JOIN priorities AS p ON t.priority_id = p.id
+            JOIN ticket_statuses AS s ON t.status_id = s.id
+            ORDER BY t.created_at DESC, t.id DESC;
+            """
+        )
+
+        # Stores all support tickets in a Python list.
+        tickets = cursor.fetchall()
+
+        # Finds all users who have the Technician role.
+        cursor.execute(
+            """
+            SELECT
+                u.id,
+                u.first_name,
+                u.last_name
+            FROM users AS u
+            JOIN roles AS r ON u.role_id = r.id
+            WHERE r.name = 'Technician'
+            ORDER BY u.first_name, u.last_name;
+            """
+        )
+
+        # Stores the available technicians for the dropdown menu.
+        technicians = cursor.fetchall()
+
+    finally:
+        # Closes the database cursor.
+        cursor.close()
+
+        # Closes the PostgreSQL connection.
+        connection.close()
+
+    # Sends the tickets and technicians to the Administrator page.
+    return render_template(
+        "admin_tickets.html",
+        tickets=tickets,
+        technicians=technicians
+    )
+
+
+# Allows administrators to assign a technician to a ticket.
+@app.route("/admin/tickets/<int:ticket_id>/assign", methods=["POST"])
+@role_required("Administrator")
+def assign_technician(ticket_id):
+
+    # Gets the selected technician ID from the form.
+    technician_id = request.form.get("technician_id", "")
+
+    # Checks that the selection contains a valid number.
+    if not technician_id.isdigit():
+        flash("Please select a valid technician.")
+        return redirect(url_for("admin_tickets"))
+
+    # Opens a connection to PostgreSQL.
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        # Assigns the ticket only if the selected user is a Technician.
+        cursor.execute(
+            """
+            UPDATE tickets
+            SET technician_id = %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+              AND EXISTS (
+                  SELECT 1
+                  FROM users AS u
+                  JOIN roles AS r ON u.role_id = r.id
+                  WHERE u.id = %s AND r.name = 'Technician'
+              )
+            RETURNING id;
+            """,
+            (int(technician_id), ticket_id, int(technician_id))
+        )
+
+        # Checks whether a valid assignment was made.
+        updated_ticket = cursor.fetchone()
+
+        if updated_ticket is None:
+            connection.rollback()
+            flash("Ticket or technician not found.")
+            return redirect(url_for("admin_tickets"))
+
+        # Saves the assignment permanently.
+        connection.commit()
+
+        flash(f"Technician assigned to Ticket #{ticket_id}.")
+
+    except Exception:
+        # Cancels the transaction if something goes wrong.
+        connection.rollback()
+        app.logger.exception("Unable to assign technician.")
+        flash("Unable to assign technician. Please try again.")
+
+    finally:
+        # Closes the database resources.
+        cursor.close()
+        connection.close()
+
+    # Returns to the Administrator ticket list.
+    return redirect(url_for("admin_tickets"))
+
+
+# Displays tickets assigned to the logged-in technician.
+@app.route("/technician/tickets")
+@role_required("Technician")
+def technician_tickets():
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        # Retrieves only tickets assigned to this technician.
+        cursor.execute(
+            """
+            SELECT
+                t.id,
+                t.title,
+                p.name,
+                s.name
+            FROM tickets AS t
+            JOIN priorities AS p ON t.priority_id = p.id
+            JOIN ticket_statuses AS s ON t.status_id = s.id
+            WHERE t.technician_id = %s
+            ORDER BY t.created_at DESC;
+            """,
+            (session["user_id"],)
+        )
+        tickets = cursor.fetchall()
+
+        # Retrieves the available ticket statuses.
+        cursor.execute(
+            "SELECT id, name FROM ticket_statuses ORDER BY id;"
+        )
+        statuses = cursor.fetchall()
+
+    finally:
+        # Closes the database connection.
+        cursor.close()
+        connection.close()
+
+    return render_template(
+        "technician_tickets.html",
+        tickets=tickets,
+        statuses=statuses
+    )
+
+
+# Allows a technician to update an assigned ticket's status.
+@app.route("/technician/tickets/<int:ticket_id>/status", methods=["POST"])
+@role_required("Technician")
+def update_ticket_status(ticket_id):
+    # Gets the status selected in the form.
+    status_id = request.form.get("status_id", type=int)
+
+    if status_id is None:
+        flash("Please select a valid status.")
+        return redirect(url_for("technician_tickets"))
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        # Updates only a ticket assigned to this technician.
+        # Also checks that the selected status exists.
+        cursor.execute(
+            """
+            UPDATE tickets
+            SET status_id = %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+              AND technician_id = %s
+              AND EXISTS (
+                  SELECT 1
+                  FROM ticket_statuses
+                  WHERE id = %s
+              )
+            RETURNING id;
+            """,
+            (
+                status_id,
+                ticket_id,
+                session["user_id"],
+                status_id
+            )
+        )
+
+        updated_ticket = cursor.fetchone()
+
+        if updated_ticket is None:
+            connection.rollback()
+            flash("Ticket not found or status is invalid.")
+        else:
+            connection.commit()
+            flash(f"Ticket #{ticket_id} status updated successfully.")
+
+    except Exception:
+        connection.rollback()
+        raise
+
+    finally:
+        cursor.close()
+        connection.close()
+
+    return redirect(url_for("technician_tickets"))
 
 if __name__ == "__main__": #Checks whether this file is being run directly.
 
